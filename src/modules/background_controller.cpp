@@ -42,8 +42,7 @@ void BackgroundController::Start()
 void BackgroundController::ControllerMain_()
 {
     SetThreadName("ControllerMain");
-    const std::regex appProcRegex("^\\w*(\\.\\w*)+\\s*$");
-    const std::regex appCoProcRegex("^\\w*(\\.\\w*)+:");
+    const std::regex appProcRegex("^[\\w]+(\\.[\\w]+)+");
 
     for (;;) {
         {
@@ -84,6 +83,7 @@ void BackgroundController::ControllerMain_()
             }
         }
 
+        auto prevStateTraceMap = stateTraceMap_;
         {
             for (auto &[pkgName, state] : stateTraceMap_) {
                 if (state != STATE_KILLED) {
@@ -91,12 +91,12 @@ void BackgroundController::ControllerMain_()
                 }
             }
             for (const auto &[pid, taskName] : backgroundTasks) {
-                if (std::regex_search(taskName, appProcRegex) || std::regex_search(taskName, appCoProcRegex)) {
+                if (std::regex_search(taskName, appProcRegex)) {
                     stateTraceMap_[taskName] = STATE_BACKGROUND;
                 }
             }
             for (const auto &[pid, taskName] : foregroundTasks) {
-                if (std::regex_search(taskName, appProcRegex) || std::regex_search(taskName, appCoProcRegex)) {
+                if (std::regex_search(taskName, appProcRegex)) {
                     stateTraceMap_[taskName] = STATE_FOREGROUND;
                 }
             }
@@ -104,7 +104,6 @@ void BackgroundController::ControllerMain_()
 
         for (const auto &[pid, taskName] : backgroundTasks) {
             if (stateTraceMap_.count(taskName) != 0) {
-                int taskState = stateTraceMap_.at(taskName);
                 int policy = 0;
                 if (policyMap_.size() > 0) {
                     std::string pkgName = taskName;
@@ -115,7 +114,11 @@ void BackgroundController::ControllerMain_()
                         policy = policyMap_.at(pkgName);
                     }
                 }
-                if (taskState == STATE_KILLED) {
+                int prevState = STATE_BACKGROUND;
+                if (prevStateTraceMap.count(taskName) == 1) {
+                    prevState = prevStateTraceMap.at(taskName);
+                }
+                if (prevState == STATE_KILLED) {
                     if (policy != POLICY_WHITELIST) {
                         kill(pid, SIGINT);
                         stateTraceMap_[taskName] = STATE_KILLED;
