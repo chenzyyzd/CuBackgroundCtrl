@@ -1,9 +1,19 @@
 #include "background_controller.h"
 
+constexpr int STATE_KILLED = 0;
+constexpr int STATE_BACKGROUND = 1;
+constexpr int STATE_FOREGROUND = 2;
+
+constexpr int POLICY_WHITELIST = -1;
+constexpr int POLICY_DEFAULT = 0;
+constexpr int POLICY_NORMAL = 1;
+constexpr int POLICY_STRICT = 2;
+
 BackgroundController::BackgroundController(const std::string &configPath) : 
     Module(), 
     configPath_(configPath),
     policyMap_(),
+    stateTraceMap_(),
     logger_(CuLogger::GetLogger()),
     thread_(),
     cv_(),
@@ -43,54 +53,95 @@ void BackgroundController::ControllerMain_()
 			}
 			unblocked_ = false;
 		}
-        std::vector<int> tasksList{};
+
+        std::unordered_map<int, std::string> backgroundTasks{};
+        std::unordered_map<int, std::string> foregroundTasks{};
         {
             const auto &lines = StrSplit(ReadFile("/dev/cpuset/background/cgroup.procs"), "\n");
             for (const auto &line : lines) {
                 int pid = StringToInteger(line);
                 if (pid > 0 && pid < 32768) {
-                    tasksList.emplace_back(pid);
+                    backgroundTasks[pid] = GetTaskName(pid);
                 }
             }
         }
-        for (const auto &pid : tasksList) {
-            std::string taskName = GetTaskName(pid);
-            if (std::regex_search(taskName, appCoProcRegex)) {
-                taskName = GetPrevString(taskName, ':');
+        {
+            const auto &lines = StrSplit(ReadFile("/dev/cpuset/foreground/cgroup.procs"), "\n");
+            for (const auto &line : lines) {
+                int pid = StringToInteger(line);
+                if (pid > 0 && pid < 32768) {
+                    foregroundTasks[pid] = GetTaskName(pid);
+                }
             }
-            if (std::regex_search(taskName, appProcRegex)) {
-                int taskType = GetTaskType(pid);
+        }
+        {
+            const auto &lines = StrSplit(ReadFile("/dev/cpuset/top-app/cgroup.procs"), "\n");
+            for (const auto &line : lines) {
+                int pid = StringToInteger(line);
+                if (pid > 0 && pid < 32768) {
+                    foregroundTasks[pid] = GetTaskName(pid);
+                }
+            }
+        }
+
+        {
+            for (auto &[pkgName, state] : stateTraceMap_) {
+                if (state != STATE_KILLED) {
+                    state = STATE_BACKGROUND;
+                }
+            }
+            for (const auto &[pid, taskName] : backgroundTasks) {
+                if (std::regex_search(taskName, appProcRegex) || std::regex_search(taskName, appCoProcRegex)) {
+                    stateTraceMap_[taskName] = STATE_BACKGROUND;
+                }
+            }
+            for (const auto &[pid, taskName] : foregroundTasks) {
+                if (std::regex_search(taskName, appProcRegex) || std::regex_search(taskName, appCoProcRegex)) {
+                    stateTraceMap_[taskName] = STATE_FOREGROUND;
+                }
+            }
+        }
+
+        for (const auto &[pid, taskName] : backgroundTasks) {
+            if (stateTraceMap_.count(taskName) != 0) {
+                int taskState = stateTraceMap_.at(taskName);
                 int policy = 0;
                 if (policyMap_.size() > 0) {
                     if (policyMap_.count(taskName) == 1) {
                         policy = policyMap_.at(taskName);
                     }
                 }
-                switch (taskType) {
-                    case TASK_KILLABLE:
-                        if (policy >= 0) {
-                            kill(pid, SIGKILL);
-                            logger_->Debug("App \"%s\" (pid=%d) has been killed.", taskName.c_str(), pid);
+                if (taskState == STATE_KILLED) {
+                    if (policy != POLICY_WHITELIST) {
+                        kill(pid, SIGINT);
+                        stateTraceMap_[taskName] = STATE_KILLED;
+                        logger_->Debug("App \"%s\" is killed.", taskName.c_str());
+                    }
+                } else {
+                    int taskType = GetTaskType(pid);
+                    if (taskType == TASK_KILLABLE) {
+                        if (policy != POLICY_WHITELIST) {
+                            kill(pid, SIGINT);
+                            stateTraceMap_[taskName] = STATE_KILLED;
+                            logger_->Debug("App \"%s\" is killed.", taskName.c_str());
                         }
-                        break;
-                    case TASK_BACKGROUND:
-                        if (policy >= 1) {
-                            kill(pid, SIGKILL);
-                            logger_->Debug("App \"%s\" (pid=%d) has been killed.", taskName.c_str(), pid);
-                        } 
-                        break;
-                    case TASK_SERVICE:
-                        if (policy == 2) {
-                            kill(pid, SIGKILL);
-                            logger_->Debug("App \"%s\" (pid=%d) has been killed.", taskName.c_str(), pid);
+                    } else if (taskType == TASK_BACKGROUND) {
+                        if (policy == POLICY_NORMAL || policy == POLICY_STRICT) {
+                            kill(pid, SIGINT);
+                            stateTraceMap_[taskName] = STATE_KILLED;
+                            logger_->Debug("App \"%s\" is killed.", taskName.c_str());
                         }
-                        break;
-                    default:
-                        break;
+                    } else if (taskType == TASK_SERVICE) {
+                        if (policy == POLICY_STRICT) {
+                            kill(pid, SIGINT);
+                            stateTraceMap_[taskName] = STATE_KILLED;
+                            logger_->Debug("App \"%s\" is killed.", taskName.c_str());
+                        }
+                    }
                 }
             }
         }
-        usleep(500000);
+        sleep(1);
     }
 }
 

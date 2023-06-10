@@ -29,7 +29,7 @@ void KillOldDaemon()
 				if (taskPid > 0 && taskPid < 32768) {
 					std::string taskName = GetTaskName(taskPid);
 					if (taskName == DAEMON_NAME && taskPid != myPid) {
-						kill(taskPid, SIGKILL);
+						kill(taskPid, SIGINT);
 					}
 				}
 			}

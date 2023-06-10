@@ -17,6 +17,7 @@ class BackgroundController : public Module
     private:
         std::string configPath_;
         std::unordered_map<std::string, int> policyMap_;
+        std::unordered_map<std::string, int> stateTraceMap_;
         CuLogger* logger_;
         std::thread thread_;
 		std::condition_variable cv_;
