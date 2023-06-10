@@ -107,8 +107,12 @@ void BackgroundController::ControllerMain_()
                 int taskState = stateTraceMap_.at(taskName);
                 int policy = 0;
                 if (policyMap_.size() > 0) {
-                    if (policyMap_.count(taskName) == 1) {
-                        policy = policyMap_.at(taskName);
+                    std::string pkgName = taskName;
+                    if (StrContains(pkgName, ":")) {
+                        pkgName = GetPrevString(pkgName, ':');
+                    }
+                    if (policyMap_.count(pkgName) == 1) {
+                        policy = policyMap_.at(pkgName);
                     }
                 }
                 if (taskState == STATE_KILLED) {
