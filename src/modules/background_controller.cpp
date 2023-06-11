@@ -13,7 +13,6 @@ BackgroundController::BackgroundController(const std::string &configPath) :
     Module(), 
     configPath_(configPath),
     policyMap_(),
-    stateTraceMap_(),
     logger_(CuLogger::GetLogger()),
     thread_(),
     cv_(),
@@ -42,7 +41,9 @@ void BackgroundController::Start()
 void BackgroundController::ControllerMain_()
 {
     SetThreadName("ControllerMain");
-    const std::regex appProcRegex("^[\\w]+(\\.[\\w]+)+");
+
+    const std::regex appProcRegex("^[\\w]+([.][\\w]+)+");
+    std::unordered_map<std::string, int> stateTraceMap{};
 
     for (;;) {
         {
@@ -83,27 +84,27 @@ void BackgroundController::ControllerMain_()
             }
         }
 
-        auto prevStateTraceMap = stateTraceMap_;
+        auto prevStateTraceMap = stateTraceMap;
         {
-            for (auto &[pkgName, state] : stateTraceMap_) {
+            for (auto &[pkgName, state] : stateTraceMap) {
                 if (state != STATE_KILLED) {
                     state = STATE_BACKGROUND;
                 }
             }
             for (const auto &[pid, taskName] : backgroundTasks) {
                 if (std::regex_search(taskName, appProcRegex)) {
-                    stateTraceMap_[taskName] = STATE_BACKGROUND;
+                    stateTraceMap[taskName] = STATE_BACKGROUND;
                 }
             }
             for (const auto &[pid, taskName] : foregroundTasks) {
                 if (std::regex_search(taskName, appProcRegex)) {
-                    stateTraceMap_[taskName] = STATE_FOREGROUND;
+                    stateTraceMap[taskName] = STATE_FOREGROUND;
                 }
             }
         }
 
         for (const auto &[pid, taskName] : backgroundTasks) {
-            if (stateTraceMap_.count(taskName) != 0) {
+            if (stateTraceMap.count(taskName) != 0) {
                 int policy = 0;
                 if (policyMap_.size() > 0) {
                     std::string pkgName = taskName;
@@ -121,28 +122,24 @@ void BackgroundController::ControllerMain_()
                 if (prevState == STATE_KILLED) {
                     if (policy != POLICY_WHITELIST) {
                         kill(pid, SIGINT);
-                        stateTraceMap_[taskName] = STATE_KILLED;
-                        logger_->Debug("App \"%s\" is killed.", taskName.c_str());
+                        stateTraceMap[taskName] = STATE_KILLED;
                     }
                 } else {
                     int taskType = GetTaskType(pid);
                     if (taskType == TASK_KILLABLE) {
                         if (policy != POLICY_WHITELIST) {
                             kill(pid, SIGINT);
-                            stateTraceMap_[taskName] = STATE_KILLED;
-                            logger_->Debug("App \"%s\" is killed.", taskName.c_str());
+                            stateTraceMap[taskName] = STATE_KILLED;
                         }
                     } else if (taskType == TASK_BACKGROUND) {
                         if (policy == POLICY_NORMAL || policy == POLICY_STRICT) {
                             kill(pid, SIGINT);
-                            stateTraceMap_[taskName] = STATE_KILLED;
-                            logger_->Debug("App \"%s\" is killed.", taskName.c_str());
+                            stateTraceMap[taskName] = STATE_KILLED;
                         }
                     } else if (taskType == TASK_SERVICE) {
                         if (policy == POLICY_STRICT) {
                             kill(pid, SIGINT);
-                            stateTraceMap_[taskName] = STATE_KILLED;
-                            logger_->Debug("App \"%s\" is killed.", taskName.c_str());
+                            stateTraceMap[taskName] = STATE_KILLED;
                         }
                     }
                 }
@@ -154,10 +151,11 @@ void BackgroundController::ControllerMain_()
 
 void BackgroundController::LoadConfig_()
 {
+    const std::regex policyRegex("^[\\w]+([.][\\w]+)+[\\s]+(-1|0|1|2)[\\s]*$");
     policyMap_.clear();
     const auto &lines = StrSplit(ReadFileEx(configPath_), "\n");
     for (const auto &line : lines) {
-        if (line.size() > 4 && line[0] != '#') {
+        if (std::regex_search(line, policyRegex)) {
             std::string packageName{};
             int policy = 0;
             packageName.resize(line.size());
@@ -167,6 +165,24 @@ void BackgroundController::LoadConfig_()
         }
     }
     logger_->Info("Config updated.");
+    for (const auto &[pkgName, policy] : policyMap_) {
+        switch (policy) {
+            case POLICY_WHITELIST:
+                logger_->Info("App \"%s\": policy whitelist.", pkgName.c_str());
+                break;
+            case POLICY_DEFAULT:
+                logger_->Info("App \"%s\": policy default.", pkgName.c_str());
+                break;
+            case POLICY_NORMAL:
+                logger_->Info("App \"%s\": policy normal.", pkgName.c_str());
+                break;
+            case POLICY_STRICT:
+                logger_->Info("App \"%s\": policy strict.", pkgName.c_str());
+                break;
+            default:
+                break;
+        }
+    }
 }
 
 void BackgroundController::ConfigModified_(const void* data)

@@ -32,7 +32,6 @@ void ConfigWatcher::Main_()
 		if (watchEvent.mask == IN_MODIFY) {
             Broadcast_SendBroadcast("ConfigWatcher.ConfigModified", nullptr);
         }
+        usleep(500000);
     }
-
-    close(fd);
 }
