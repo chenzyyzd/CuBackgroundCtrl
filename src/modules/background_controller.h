@@ -15,13 +15,14 @@ class BackgroundController : public Module
         void Start();
 
     private:
+        std::regex pkgNameRegex_;
         std::string configPath_;
-        std::unordered_map<std::string, int> policyMap_;
+        std::vector<std::string> whiteList_;
         CuLogger* logger_;
         std::thread thread_;
-		std::condition_variable cv_;
-		std::mutex mtx_;
-		bool unblocked_;
+        std::condition_variable cv_;
+        std::mutex mtx_;
+        bool unblocked_;
 
         void ControllerMain_();
         void LoadConfig_();

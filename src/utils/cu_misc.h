@@ -66,3 +66,4 @@ uint64_t GetTimeStampMs(void);
 int StringToInteger(const std::string &str);
 uint64_t StringToLong(const std::string &str);
 uint64_t String16BitToInteger(const std::string &str);
+std::string TrimStr(const std::string &str);

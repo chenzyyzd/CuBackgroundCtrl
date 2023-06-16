@@ -666,3 +666,25 @@ uint64_t String16BitToInteger(const std::string &str)
 
     return integer;
 }
+
+std::string TrimStr(const std::string &str)
+{
+    std::string trimedStr = "";
+    for (const auto &c : str) {
+        switch (c) {
+            case ' ':
+                break;
+            case '\n':
+                break;
+            case '\t':
+                break;
+            case '\r':
+                break;
+            default:
+                trimedStr += c;
+                break;
+        }
+    }
+
+    return trimedStr;
+}

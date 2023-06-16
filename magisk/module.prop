@@ -1,6 +1,6 @@
 id=cu_background_ctrl
 name=CuBackgroundCtrl
-version=v1
-versionCode=1
+version=v1.1
+versionCode=101
 author=chenzyyzd@github.com
 description=Control the background processes on Android Native System.
