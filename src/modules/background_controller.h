@@ -28,4 +28,6 @@ class BackgroundController : public Module
         void LoadConfig_();
         void ConfigModified_(const void* data);
         void CgroupModified_(const void* data);
+        void ScreenStateChanged_(const void* data);
+        void Reflash_();
 };

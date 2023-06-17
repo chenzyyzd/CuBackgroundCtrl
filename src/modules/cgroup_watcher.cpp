@@ -12,7 +12,7 @@ void CgroupWatcher::Start()
 	} else {
 		screenState_ = GetScreenStateViaCgroup();
 	}
-	Broadcast_SendBroadcast("CgroupWatcher.ScreenStateChanged", (void*)(int64_t)screenState_);
+	Broadcast_SendBroadcast("CgroupWatcher.ScreenStateChanged", GetDataPtr<int>(screenState_));
 
 	thread_ = std::thread(std::bind(&CgroupWatcher::Main_, this));
 	thread_.detach();
@@ -100,7 +100,7 @@ void CgroupWatcher::Main_()
 					screenState_ = GetScreenStateViaCgroup();
 				}
 				if (screenState_ == SCREEN_OFF) {
-					Broadcast_SendBroadcast("CgroupWatcher.ScreenStateChanged", (void*)(int64_t)screenState_);
+					Broadcast_SendBroadcast("CgroupWatcher.ScreenStateChanged", GetDataPtr<int>(screenState_));
 				}
 			} else {
 				if (androidSDKVersion < 29) {
@@ -109,7 +109,7 @@ void CgroupWatcher::Main_()
 					screenState_ = GetScreenStateViaCgroup();
 				}
 				if (screenState_ == SCREEN_ON) {
-					Broadcast_SendBroadcast("CgroupWatcher.ScreenStateChanged", (void*)(int64_t)screenState_);
+					Broadcast_SendBroadcast("CgroupWatcher.ScreenStateChanged", GetDataPtr<int>(screenState_));
 				}
 			}
 		}

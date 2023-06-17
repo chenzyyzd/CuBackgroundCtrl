@@ -13,3 +13,18 @@ void Module::Broadcast_SendBroadcast(const std::string &broadcastName, const voi
 {
 	Broadcast::GetInstance()->SendBroadcast(broadcastName, data);
 }
+
+void Module::Timer_AddTimer(const std::string &name, const Timer::TimerTask &task, const int &intervalMs)
+{
+	Timer::GetInstance()->AddTimer(name, task, intervalMs);
+}
+
+void Module::Timer_DeleteTimer(const std::string &name)
+{
+	Timer::GetInstance()->DeleteTimer(name);
+}
+
+bool Module::Timer_IsTimerExist(const std::string &name)
+{
+	return Timer::GetInstance()->IsTimerExist(name);
+}

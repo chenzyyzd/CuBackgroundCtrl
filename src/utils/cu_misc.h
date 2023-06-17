@@ -1,13 +1,13 @@
 #pragma once
 
 #include <iostream>
-#include <cstdio>
+#include <stdexcept>
 #include <utility>
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <cstdio>
 #include <cstdlib>
-#include <cstdbool>
 #include <climits>
 #include <ctime>
 #include <cstdarg>

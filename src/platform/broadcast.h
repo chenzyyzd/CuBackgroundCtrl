@@ -6,8 +6,8 @@
 #include <unordered_map>
 #include <vector>
 #include <utility>
-
 #include "singleton.h"
+#include "utils/ptr_data_conversion.h"
 
 class Broadcast : public Singleton<Broadcast>
 {

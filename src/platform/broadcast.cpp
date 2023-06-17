@@ -1,6 +1,6 @@
 #include "broadcast.h"
 
-Broadcast::Broadcast() {}
+Broadcast::Broadcast() : broadcastMap_() {}
 
 void Broadcast::SetBroadcastReceiver(const std::string &broadcastName, const BroadcastReceiver &br)
 {

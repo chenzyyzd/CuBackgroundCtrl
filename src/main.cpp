@@ -19,7 +19,6 @@ void ResetArgv(int argc, char* argv[])
 void KillOldDaemon()
 {
 	int myPid = getpid();
-
 	DIR* dir = opendir("/proc");
 	if (dir) {
 		struct dirent* entry = nullptr;
@@ -69,7 +68,6 @@ int main(int argc, char* argv[])
 	std::string option = "";
 	std::string configPath = "";
 	std::string logPath = "";
-
 	if (argc == 2) {
 		option = argv[1];
 	} else if (argc == 4) {
@@ -91,5 +89,3 @@ int main(int argc, char* argv[])
 
 	return 0;
 }
-
-

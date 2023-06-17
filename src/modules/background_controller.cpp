@@ -30,11 +30,13 @@ void BackgroundController::Start()
         thread_ = std::thread(std::bind(&BackgroundController::ControllerMain_, this));
         thread_.detach();
     }
+    Timer_AddTimer("BackgroundController.Reflash", std::bind(&BackgroundController::Reflash_, this), 5000);
     {
         using namespace std::placeholders;
         Broadcast_SetBroadcastReceiver("CgroupWatcher.TopAppCgroupModified", std::bind(&BackgroundController::CgroupModified_, this, _1));
         Broadcast_SetBroadcastReceiver("CgroupWatcher.ForegroundCgroupModified", std::bind(&BackgroundController::CgroupModified_, this, _1));
         Broadcast_SetBroadcastReceiver("CgroupWatcher.BackgroundCgroupModified", std::bind(&BackgroundController::CgroupModified_, this, _1));
+        Broadcast_SetBroadcastReceiver("CgroupWatcher.ScreenStateChanged", std::bind(&BackgroundController::ScreenStateChanged_, this, _1));
         Broadcast_SetBroadcastReceiver("ConfigWatcher.ConfigModified", std::bind(&BackgroundController::ConfigModified_, this, _1));
     }
 }
@@ -68,8 +70,7 @@ void BackgroundController::ControllerMain_()
             std::vector<std::string> needFreezeApps{};
             for (const auto &[pid, taskName] : backgroundTasks) {
                 if (std::regex_search(taskName, pkgNameRegex_)) {
-                    const auto &iter = std::find(whiteList_.begin(), whiteList_.end(), taskName);
-                    if (iter == whiteList_.end()) {
+                    if (std::find(whiteList_.begin(), whiteList_.end(), taskName) == whiteList_.end()) {
                         int taskType = GetTaskType(pid);
                         if (taskType == TASK_KILLABLE) {
                             needKillApps.emplace_back(taskName);
@@ -83,32 +84,24 @@ void BackgroundController::ControllerMain_()
             for (const auto &pkgName : needKillApps) {
                 for (const auto &[pid, taskName] : backgroundTasks) {
                     if (StrContains(taskName, pkgName)) {
-                        if (kill(pid, SIGTERM) == -1) {
-                            kill(pid, SIGKILL);
-                        }
-                        {
-                            const auto &iter = std::find(freezedTasks.begin(), freezedTasks.end(), pid);
-                            if (iter != freezedTasks.end()) {
-                                freezedTasks.erase(iter);
-                            }
+                        kill(pid, SIGKILL);
+                        const auto &iter = std::find(freezedTasks.begin(), freezedTasks.end(), pid);
+                        if (iter != freezedTasks.end()) {
+                            freezedTasks.erase(iter);
                         }
                     }
                 }
             }
             {
-                std::vector<int> freezingTasks{};
+                auto prevFreezedTasks = freezedTasks;
+                freezedTasks.clear();
                 for (const auto &pkgName : needFreezeApps) {
                     for (const auto &[pid, taskName] : backgroundTasks) {
                         if (StrContains(taskName, pkgName)) {
-                            freezingTasks.emplace_back(pid);
+                            kill(pid, SIGSTOP);
+                            freezedTasks.emplace_back(pid);
                         }
                     }
-                }
-                auto prevFreezedTasks = freezedTasks;
-                freezedTasks.clear();
-                for (const int &pid : freezingTasks) {
-                    kill(pid, SIGSTOP);
-                    freezedTasks.emplace_back(pid);
                 }
                 for (const int &pid : prevFreezedTasks) {
                     if (std::find(freezedTasks.begin(), freezedTasks.end(), pid) == freezedTasks.end()) {
@@ -143,6 +136,27 @@ void BackgroundController::ConfigModified_(const void* data)
 }
 
 void BackgroundController::CgroupModified_(const void* data)
+{
+    std::unique_lock<std::mutex> lck(mtx_);
+    unblocked_ = true;
+    cv_.notify_all();
+}
+
+void BackgroundController::ScreenStateChanged_(const void* data)
+{
+    int screenState = GetPtrData<int>(data);
+    if (screenState == SCREEN_OFF) {
+        if (Timer_IsTimerExist("BackgroundController.Reflash")) {
+            Timer_DeleteTimer("BackgroundController.Reflash");
+        }
+    } else if (screenState == SCREEN_ON) {
+        if (!Timer_IsTimerExist("BackgroundController.Reflash")) {
+            Timer_AddTimer("BackgroundController.Reflash", std::bind(&BackgroundController::Reflash_, this), 5000);
+        }
+    }
+}
+
+void BackgroundController::Reflash_()
 {
     std::unique_lock<std::mutex> lck(mtx_);
     unblocked_ = true;
